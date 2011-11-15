@@ -65,4 +65,8 @@ public class JavaSourceWriter {
     public void endMethod() {
         endBlock();
     }
+
+    public void flush() {
+        printWriter.flush();
+    }
 }

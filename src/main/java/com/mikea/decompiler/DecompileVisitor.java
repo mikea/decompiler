@@ -16,11 +16,12 @@ import java.util.Map;
 
 /**
  */
-public class DecompileVisitor implements ClassVisitor {
+public class DecompileVisitor extends ClassVisitor {
     private final JavaSourceWriter writer;
     private Map<String, MethodInfo> methodInfos = new HashMap<String, MethodInfo>();
 
     public DecompileVisitor(JavaSourceWriter writer) {
+        super(Opcodes.ASM4);
         this.writer = writer;
     }
 
@@ -75,7 +76,7 @@ public class DecompileVisitor implements ClassVisitor {
         Type type = Type.getType(desc);
         writer.writeField(name, toJavaType(type));
 
-        return new FieldVisitor() {
+        return new FieldVisitor(Opcodes.ASM4) {
             @Override
             public AnnotationVisitor visitAnnotation(String s, boolean b) {
                 throw new UnsupportedOperationException("Method visitAnnotation not implemented in  .");
@@ -94,7 +95,7 @@ public class DecompileVisitor implements ClassVisitor {
         };
     }
 
-    private String toJavaType(Type type) {
+    public static String toJavaType(Type type) {
         switch (type.getSort()) {
             case Type.DOUBLE:
                 return "double";
@@ -118,254 +119,9 @@ public class DecompileVisitor implements ClassVisitor {
 
         final MethodInfo methodInfo = methodInfos.get(MethodInfo.getMethodTag(access, name, desc, signature, exceptions));
 
-        final Evaluator evaluator = new Evaluator(methodInfo, writer);
+        final Evaluator evaluator = new Evaluator(writer);
 
-        return new MethodVisitor() {
-            @Override
-            public AnnotationVisitor visitAnnotationDefault() {
-                throw new UnsupportedOperationException("Method visitAnnotationDefault not implemented in  .");
-            }
-
-            @Override
-            public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-                evaluator.flush();
-                writer.writeComment("visitAnnotation: " + desc + " - " + visible);
-                return null;
-            }
-
-            @Override
-            public AnnotationVisitor visitParameterAnnotation(int i, String s, boolean b) {
-                evaluator.flush();
-                throw new UnsupportedOperationException("Method visitParameterAnnotation not implemented in  .");
-
-            }
-
-            @Override
-            public void visitAttribute(Attribute attribute) {
-                evaluator.flush();
-                throw new UnsupportedOperationException("Method visitAttribute not implemented in  .");
-
-            }
-
-            @Override
-            public void visitCode() {
-                evaluator.flush();
-                writer.writeComment("visitCode");
-            }
-
-            @Override
-            public void visitFrame(int i, int i1, Object[] objects, int i2, Object[] objects1) {
-                evaluator.flush();
-                throw new UnsupportedOperationException("Method visitFrame not implemented in  .");
-            }
-
-            @Override
-            public void visitInsn(int opcode) {
-                switch (opcode) {
-                    case Opcodes.ICONST_1: {
-                        evaluator.push("1", Type.INT_TYPE);
-                        break;
-                    }
-                    case Opcodes.ICONST_0: {
-                        evaluator.push("0", Type.INT_TYPE);
-                        break;
-                    }
-                    case Opcodes.DUP: {
-                        evaluator.dup();
-                        break;
-                    }
-                    case Opcodes.POP2: {
-                        evaluator.pop2();
-                        break;
-                    }
-                    case Opcodes.AASTORE: {
-                        evaluator.stmt3("({0})[{1}]={2}");
-                        break;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitInsn: " + opcode);
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void visitIntInsn(int opcode, int operand) {
-                switch (opcode) {
-                    case Opcodes.SIPUSH: {
-                        evaluator.push(String.valueOf(operand), Type.INT_TYPE);
-                        break;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitIntInsn: " + opcode + " - " + operand);
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void visitVarInsn(int opcode, int var) {
-                switch (opcode) {
-                    case Opcodes.ILOAD: {
-                        evaluator.push(methodInfo.getVarName(var), Type.INT_TYPE);
-                        break;
-                    }
-                    case Opcodes.ALOAD: {
-                        evaluator.push(methodInfo.getVarName(var), methodInfo.getVarType(var));
-                        break;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitVarInsn: " + opcode + " - " + var);
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void visitTypeInsn(int opcode, String type) {
-                switch (opcode) {
-                    case Opcodes.ANEWARRAY: {
-                        evaluator.expr1("new " + type + "[{0}]", Type.getType("[" + type));
-                        return;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitTypeInsn: " + opcode + " - " + type);
-                        return;
-                    }
-                }
-            }
-
-            @Override
-            public void visitFieldInsn(int opcode, String owner, String name, String desc) {
-                switch (opcode) {
-                    case Opcodes.GETFIELD: {
-                        evaluator.getField(owner, name, Type.getType(desc));
-                        return;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitFieldInsn: " + opcode + " - " + owner + " - " + name + " - " + desc);
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void visitMethodInsn(int opcode, String owner, String name, String desc) {
-                switch (opcode) {
-                    case Opcodes.INVOKESTATIC: {
-                        Type returnType = Type.getReturnType(desc);
-                        Type[] types = Type.getArgumentTypes(desc);
-                        evaluator.staticCall(owner + "." + name, types.length, returnType);
-                        return;
-                    }
-                    case Opcodes.INVOKEVIRTUAL: {
-                        Type returnType = Type.getReturnType(desc);
-                        Type[] types = Type.getArgumentTypes(desc);
-                        evaluator.virtualCall(name, types.length, returnType);
-                        return;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitMethodInsn: " + opcode + " - " + owner + " - " + name + " - " + desc);
-                        return;
-                    }
-                }
-            }
-
-            @Override
-            public void visitJumpInsn(int opcode, Label label) {
-                switch (opcode) {
-                    case Opcodes.IF_ACMPNE: {
-                        evaluator.condJump("!=", label);
-                        break;
-                    }
-                    case Opcodes.GOTO: {
-                        writer.writeComment("GOTO " + label);
-                        break;
-                    }
-                    default: {
-                        evaluator.flush();
-                        writer.writeComment("visitJumpInsn: " + opcode + " - " + label);
-                    }
-                }
-            }
-
-            @Override
-            public void visitLabel(Label label) {
-                evaluator.flush();
-                writer.writeComment("visitLabel: " + label);
-            }
-
-            @Override
-            public void visitLdcInsn(Object cst) {
-                if (cst instanceof String) {
-                    evaluator.push("\"" + cst.toString() + "\"", Type.getType(cst.getClass()));
-                    return;
-                } else {
-                    evaluator.flush();
-                    writer.writeComment("visitLdcInsn: " + cst);
-                }
-            }
-
-            @Override
-            public void visitIincInsn(int var, int increment) {
-                evaluator.flush();
-                writer.writeComment("visitIincInsn: " + var + " - " + increment);
-            }
-
-            @Override
-            public void visitTableSwitchInsn(int min, int max, Label dflt, Label[] labels) {
-                evaluator.flush();
-                writer.writeComment("visitTableSwitchInsn");
-            }
-
-            @Override
-            public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
-                evaluator.flush();
-                writer.writeComment("visitLookupSwitchInsn: " + dflt + " - " + keys + " - " + labels);
-            }
-
-            @Override
-            public void visitMultiANewArrayInsn(String desc, int dims) {
-                evaluator.flush();
-                writer.writeComment("visitMultiANewArrayInsn: " + desc + " - " + dims);
-            }
-
-            @Override
-            public void visitTryCatchBlock(Label start, Label end, Label handler, String type) {
-                evaluator.flush();
-                writer.writeComment("visitTryCatchBlock: " + start + " - " + end + " - " + handler + " - " + type);
-            }
-
-            @Override
-            public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
-                evaluator.flush();
-                writer.writeComment("visitLocalVariable: " + name + "- " + desc + " - " + signature + " - " + start + " - " + end + " - " + index);
-            }
-
-            @Override
-            public void visitLineNumber(int line, Label start) {
-                evaluator.flush();
-                writer.writeComment("visitLineNumber: " + line + " " + start);
-            }
-
-            @Override
-            public void visitMaxs(int maxStack, int maxLocals) {
-                evaluator.flush();
-                writer.writeComment("visitMaxs: " + maxStack + " - " + maxLocals);
-            }
-
-            @Override
-            public void visitEnd() {
-                evaluator.flush();
-                writer.endMethod();
-            }
-        };
+        return new EvaluateMethodVisitor(evaluator, methodInfo, writer);
     }
 
     @Override
@@ -375,12 +131,19 @@ public class DecompileVisitor implements ClassVisitor {
     }
 
     public void decompile(ClassReader reader) {
-        reader.accept(new AbstractClassVisitor() {
+        reader.accept(new ClassVisitor(Opcodes.ASM4) {
+            public String className;
+
+            @Override
+            public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                this.className = name;
+            }
+
             @Override
             public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-                final MethodInfo methodInfo = new MethodInfo(access, name, desc, signature, exceptions);
+                final MethodInfo methodInfo = new MethodInfo(className, access, name, desc, signature, exceptions);
                 methodInfos.put(methodInfo.getTag(), methodInfo);
-                return new AbstractMethodVisitor() {
+                return new MethodVisitor(Opcodes.ASM4) {
                     @Override
                     public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
                         methodInfo.addVar(index, name, Type.getType(desc));

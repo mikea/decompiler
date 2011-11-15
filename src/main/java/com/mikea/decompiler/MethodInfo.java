@@ -4,21 +4,26 @@ import org.objectweb.asm.Type;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  */
 public class MethodInfo {
 
+    final String className;
     private final int access;
     private final String name;
     private final String desc;
     private final String signature;
     private final String[] exceptions;
 
-    private final Map<Integer, VarInfo> vars = new HashMap<Integer, VarInfo>();
+    private final Map<Integer, VarInfo> locals = new HashMap<Integer, VarInfo>();
+    private final Set<String> localNames = new HashSet<String>();
 
-    public MethodInfo(int access, String name, String desc, String signature, String[] exceptions) {
+    public MethodInfo(String className, int access, String name, String desc, String signature, String[] exceptions) {
+        this.className = className;
         this.access = access;
         this.name = name;
         this.desc = desc;
@@ -27,7 +32,14 @@ public class MethodInfo {
     }
 
     public void addVar(int index, String name, Type type) {
-        vars.put(index, new VarInfo(name, type));
+        String realName = name;
+        int i = 0;
+        while (localNames.contains(realName)) {
+            realName = name + i;
+            i++;
+        }
+        locals.put(index, new VarInfo(realName, type));
+        localNames.add(realName);
     }
 
     public String getTag() {
@@ -40,7 +52,7 @@ public class MethodInfo {
     }
 
     public String getVarName(int var) {
-        VarInfo varInfo = vars.get(var);
+        VarInfo varInfo = locals.get(var);
         if (varInfo == null) {
             return "__local_" + var;
         }
@@ -48,7 +60,7 @@ public class MethodInfo {
     }
 
     public Type getVarType(int var) {
-        VarInfo varInfo = vars.get(var);
+        VarInfo varInfo = locals.get(var);
         if (varInfo == null) {
             System.err.println("error: Null type");
             return Type.getObjectType("UnknownType");

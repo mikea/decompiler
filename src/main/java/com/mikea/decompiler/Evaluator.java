@@ -12,50 +12,54 @@ import java.util.Stack;
 /**
  */
 public class Evaluator {
-    private final MethodInfo methodInfo;
     private final JavaSourceWriter writer;
 
     private Stack<Value> stack = new Stack<Value>();
 
-    public Evaluator(MethodInfo methodInfo, JavaSourceWriter writer) {
-        this.methodInfo = methodInfo;
+    public Evaluator(JavaSourceWriter writer) {
         this.writer = writer;
     }
 
-    public void push(String expr, Type type) {
-        stack.push(new Value(expr, type));
+    public void load(String expr, Type type) {
+        writer.writeStatement(getTempName() + " = " + expr);
+        stack.push(new Value(getTempName(), type));
     }
 
     public void flush() {
+        flush(true);
+    }
+
+    public void flush(boolean failOnError) {
         if (stack.isEmpty()) {
             return;
         }
         writer.writeComment("e: stack=" + stack.toString());
-        stack.clear();
+        writer.flush();
+
+        if (failOnError) {
+            throw new IllegalStateException();
+        }
     }
 
     public void dup() {
-        if (stack.empty()) {
-            flush();
-            writer.writeComment("e: DUP");
-            return;
-        } else {
-            Value v = stack.peek();
-            int sort = v.type.getSort();
-            String expr = v.expr;
-            if (sort == Type.ARRAY || sort == Type.OBJECT) {
-                expr = "&" + expr;
-            }
-            stack.push(new Value(expr, v.type));
-        }
+        Value v = stack.peek();
+        writer.writeStatement(getTempName() + " = " + v.expr);
+        stack.push(new Value(getTempName(), v.type));
     }
 
-    public void pop2() {
-        if (stack.empty()) {
-            writer.writeComment("e: POP2");
-            return;
-        }
+    public void dupx1() {
+        Value v1 = stack.pop();
+        Value v2 = stack.pop();
+        writer.writeStatement(getTempName() + " = " + v1.expr);
+        writer.writeStatement(getTempName() + " = " + v2.expr);
+        writer.writeStatement(getTempName() + " = " + v1.expr);
+        stack.push(new Value(getTempName(), v1.type));
+        stack.push(new Value(getTempName(), v2.type));
+        stack.push(new Value(getTempName(), v1.type));
+    }
 
+
+    public void pop2() {
         Value value = stack.peek();
         if (value.type == Type.DOUBLE_TYPE || value.type == Type.LONG_TYPE) {
             stack.pop();
@@ -65,6 +69,87 @@ public class Evaluator {
         }
     }
 
+    public void dup2() {
+        Value value = stack.peek();
+        if (value.type == Type.DOUBLE_TYPE || value.type == Type.LONG_TYPE) {
+            writer.writeStatement(getTempName() + " = " + value.expr);
+            stack.push(value);
+        } else {
+            Value v1 = stack.pop();
+            Value v2 = stack.pop();
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+        }
+    }
+
+    public void dupx2() {
+        Value value = stack.peek();
+        if (value.type == Type.DOUBLE_TYPE || value.type == Type.LONG_TYPE) {
+            Value v1 = stack.pop();
+            Value v2 = stack.pop();
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+        } else {
+            Value v1 = stack.pop();
+            Value v2 = stack.pop();
+            Value v3 = stack.pop();
+
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+            writer.writeStatement(getTempName() + " = " + v3.expr);
+            stack.push(v3);
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+        }
+    }
+
+    public void dup2x1() {
+        Value value = stack.peek();
+        if (value.type == Type.DOUBLE_TYPE || value.type == Type.LONG_TYPE) {
+            Value v1 = stack.pop();
+            Value v2 = stack.pop();
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+        } else {
+            Value v1 = stack.pop();
+            Value v2 = stack.pop();
+            Value v3 = stack.pop();
+
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+            writer.writeStatement(getTempName() + " = " + v3.expr);
+            stack.push(v3);
+            writer.writeStatement(getTempName() + " = " + v2.expr);
+            stack.push(v2);
+            writer.writeStatement(getTempName() + " = " + v1.expr);
+            stack.push(v1);
+        }
+    }
+
+
+    public void pop() {
+        stack.pop();
+    }
+
+
     public void getField(String owner, String name, Type type) {
         if (stack.empty()) {
             flush();
@@ -73,10 +158,11 @@ public class Evaluator {
         }
 
         Value value = stack.pop();
-        stack.push(new Value(value.expr + "." + name, type));
+        writer.writeStatement(getTempName() + " = " + value.expr + "." + name);
+        stack.push(new Value(getTempName(), type));
     }
 
-    public void condJump(String operation, Label label) {
+    public void condJump2(String operation, Label label) {
         if (stack.size() < 2) {
             flush();
             writer.writeComment("e: Condjump " + operation + " - " + label);
@@ -87,6 +173,18 @@ public class Evaluator {
         Value value1 = stack.pop();
         writer.writeStatement("if (" + value1 + " " + operation + " " + value2 + ") jump " + label);
     }
+
+    public void condJump1(String operation, Label label) {
+        if (stack.size() < 1) {
+            flush();
+            writer.writeComment("e: Condjump " + operation + " - " + label);
+            return;
+        }
+
+        Value value = stack.pop();
+        writer.writeStatement("if (" + value + " " + operation + ") jump " + label);
+    }
+
 
     public void staticCall(String method, int argsCount, Type returnType) {
         if (stack.size() < argsCount) {
@@ -106,18 +204,12 @@ public class Evaluator {
             argList += args.get(i).expr;
         }
 
-        stack.push(new Value(method + "(" + argList + ")", returnType));
-    }
-
-    public void expr1(String format, Type type) {
-        if (stack.size() < 1) {
-            writer.writeComment("e: expr1: " + format + " - " + type);
-            flush();
-            return;
+        if (returnType.getSort() != Type.VOID) {
+            writer.writeStatement(getTempName() + " = " + method + "(" + argList + ")");
+            stack.push(new Value(getTempName(), returnType));
+        } else {
+            writer.writeStatement(method + "(" + argList + ")");
         }
-
-        Value val = stack.pop();
-        stack.push(new Value(MessageFormat.format(format, val.expr), type));
     }
 
     public void virtualCall(String method, int argsCount, Type returnType) {
@@ -135,7 +227,7 @@ public class Evaluator {
         stmt(s, 3);
     }
 
-    private void stmt(String s, int argsCount) {
+    void stmt(String s, int argsCount) {
         if (stack.size() < argsCount) {
             writer.writeComment("e: stmt: " + s);
             flush();
@@ -149,8 +241,60 @@ public class Evaluator {
 
         String stmt = new MessageFormat(s).format(args.toArray(), new StringBuffer(), new FieldPosition(0)).toString();
         writer.writeStatement(stmt);
-        writer.writeComment("stack after: " + stack.toString());
     }
+
+    public String getTempName() {
+        return "__temp_" + stack.size();
+    }
+
+    public void expr2(String format, Type type) {
+        expr(format, type, 2);
+    }
+
+    public void expr1(String format, Type type) {
+        expr(format, type, 1);
+    }
+
+    public void expr(String format, Type type, int argsCount) {
+        if (stack.size() < argsCount) {
+            writer.writeComment("e: expr: " + format + " - " + type);
+            flush();
+            return;
+        }
+
+        List<String> args = new ArrayList<String>();
+        for (int i = 0; i < argsCount; ++i) {
+            args.add(0, stack.pop().expr);
+        }
+
+        String e = new MessageFormat(format).format(args.toArray(), new StringBuffer(), new FieldPosition(0)).toString();
+        writer.writeStatement(getTempName() + " = " + e);
+        stack.push(new Value(getTempName(), type));
+    }
+
+    public void stmt1(String format) {
+        stmt(format, 1);
+    }
+
+    public void stmt0(String format) {
+        stmt(format, 0);
+    }
+
+    public void stmt2(String format) {
+        stmt(format, 2);
+    }
+
+    public void expr0(String s, Type type) {
+        expr(s, type, 0);
+    }
+
+    public void swap() {
+        Value v1 = stack.pop();
+        Value v2 = stack.pop();
+        stack.push(v1);
+        stack.push(v2);
+    }
+
 
     private static class Value {
         private final String expr;

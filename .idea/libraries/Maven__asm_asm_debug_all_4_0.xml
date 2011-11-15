@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="Maven: asm:asm-debug-all:4.0">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/asm/asm-debug-all/4.0/asm-debug-all-4.0.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/asm/asm-debug-all/4.0/asm-debug-all-4.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/asm/asm-debug-all/4.0/asm-debug-all-4.0-sources.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/asm-4.0/src.zip!/" />
+    </SOURCES>
+  </library>
+</component>
